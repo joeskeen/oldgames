@@ -1,0 +1,7 @@
+*.iso
+*.bin
+*.cue
+*.vhd
+*.img
+dosbox-x/
+programs/

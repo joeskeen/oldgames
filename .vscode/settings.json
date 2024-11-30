@@ -1,0 +1,14 @@
+{
+    "cSpell.words": [
+        "imgmount",
+        "oldgames",
+        "xcopy"
+    ],
+    "material-icon-theme.files.associations": {
+        "*.img": "virtual",
+        "*.vhd": "virtual"
+    },
+    "material-icon-theme.folders.associations": {
+        "images": "desktop"
+    },
+}

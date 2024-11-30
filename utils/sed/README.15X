@@ -1,0 +1,23 @@
+SED v1.5						23 Sep 91
+
+Included are the bare minimums for sed15 (executable, manual, and
+this file).
+
+For full details on its history and development, full source code,
+etc., get sed15.zip.
+
+This would be public domain, except people keep *stealing* from the
+public domain, copyrighting it as their own, and restricting the rest
+of us from using it again.  With that filthy, gods-cursed problem in
+mind, I'll copyright this sucker for the original author, me and h**2,
+just to keep the wicked in line.
+
+You, Dear Reader, may do *anything* you wish with it except steal it.
+
+Copyright (c) 1991 Eric S. Raymond, David P Kirschbaum & Howard L. Helman
+All Rights Reserved
+
+David Kirschbaum
+Toad Hall
+kirsch@usasoc.soc.mil
+

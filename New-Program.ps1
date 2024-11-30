@@ -69,6 +69,8 @@ BOOT C:
 $runConfig = Import-DosBoxXConf -Path $progInstallConfPath
 | Set-ConfigOption -SectionName 'sdl' -OptionName 'fullscreen' -Value 'true'
 | Set-ConfigOption -SectionName 'sdl' -OptionName 'fullresolution' -Value 'desktop'
+| Set-ConfigOption -SectionName 'sdl' -OptionName 'output' -Value 'opengl'
+| Set-ConfigOption -SectionName 'sdl' -OptionName 'aspect' -Value 'true'
 | Set-ConfigOption -SectionName 'dosbox' -OptionName 'title' -Value "$ProgramName"
 | Set-ConfigOption -SectionName 'config' -OptionName 'set TARGET' -Value $programCommand
 | Set-ConfigOption -SectionName 'autoexec' -Value $runAutoexec

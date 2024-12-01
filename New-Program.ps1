@@ -77,4 +77,4 @@ $runConfig = Import-DosBoxXConf -Path $progInstallConfPath
 
 Export-DosBoxXConf -Config $runConfig -Path "$programDir/dosbox-x.conf"
 
-# TODO: search the disks for ico files to use as the icon
+$ProgramName | Out-File -FilePath "$programDir/program-name.txt"

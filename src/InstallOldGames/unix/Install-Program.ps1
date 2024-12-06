@@ -21,6 +21,7 @@ function Install-Program {
     } else {
         Write-Host "Program name file not found for $ProgramDirName."
         $fullProgramName = Read-Host "Enter the full name of the program"
+        $fullProgramName | Out-File -FilePath "$programDir/program-name.txt"
     }
 
     $iconPath = [System.IO.Path]::Join($programDir, "icon.png")

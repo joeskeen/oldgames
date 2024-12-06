@@ -63,3 +63,4 @@ All of these steps are done in the root directory of this repository.
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
+fullscreen

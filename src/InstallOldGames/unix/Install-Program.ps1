@@ -15,14 +15,7 @@ function Install-Program {
         throw "Program directory '$programDir' does not exist."
     }
 
-    $fullNamePath = [System.IO.Path]::Join($programDir, "program-name.txt")
-    if ((Test-Path -Path $fullNamePath)) {
-        $fullProgramName = Get-Content -Path $fullNamePath
-    } else {
-        Write-Host "Program name file not found for $ProgramDirName."
-        $fullProgramName = Read-Host "Enter the full name of the program"
-        $fullProgramName | Out-File -FilePath "$programDir/program-name.txt"
-    }
+    $fullProgramName = Get-ProgramFullName -ProgramDirName $ProgramDirName
 
     $iconPath = [System.IO.Path]::Join($programDir, "icon.png")
     if (-not (Test-Path -Path $iconPath)) {

@@ -6,14 +6,16 @@ param(
     [string]$ProgramName,
 
     [Parameter()]
-    [ValidateSet('win9x','win3x', 'dos')]
-    [string]$EnvType = 'dos',
+    # [ValidateSet('win9x','win3x', 'dos')] # TODO: Add support for Windows 3.x and DOS
+    [ValidateSet('win9x')]
+    [string]$EnvType = 'win9x',
 
     [Parameter()]
     [string[]]$DiskImagePaths = @()
 )
 
 Import-Module "$PSScriptRoot/src/PSDosBoxXConf" -Force
+Import-Module "$PSScriptRoot/src/InstallOldGames" -Force
 
 $normalizedName = $ProgramName.Trim().ToLower() -replace '[^A-Za-z0-9]', '-'
 $programDir = "$PSScriptRoot/programs/$normalizedName"
@@ -78,3 +80,5 @@ $runConfig = Import-DosBoxXConf -Path $progInstallConfPath
 Export-DosBoxXConf -Config $runConfig -Path "$programDir/dosbox-x.conf"
 
 $ProgramName | Out-File -FilePath "$programDir/program-name.txt"
+
+Get-ProgramIcon -ProgramDirName $normalizedName

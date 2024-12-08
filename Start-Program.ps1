@@ -3,7 +3,10 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [string]$ProgramDirName
+    [string]$ProgramDirName,
+
+    [Parameter()]
+    [switch]$NoExit
 )
 
 $programDir = "$PSScriptRoot/programs/$ProgramDirName"
@@ -24,11 +27,15 @@ if (-not (Test-Path -Path $userProgramDir)) {
 $relativeProgramDir = Resolve-Path -Path $programDir -Relative -RelativeBasePath $userProgramDir
 
 Import-Module "$PSScriptRoot/src/PSDosBoxXConf" -Force
+Import-Module "$PSScriptRoot/src/InstallOldGames" -Force
+
+$fullProgramName = Get-ProgramFullName -ProgramDirName $ProgramDirName
+Write-Host "Starting program '$fullProgramName'..."
 
 $baseConfPath = "$programDir/dosbox-x.conf"
 
 $baseConf = Import-DosBoxXConf -Path $baseConfPath
-$target = $baseConf | Get-ConfigOption -SectionName 'config' -OptionName 'set TARGET'
+$target = ($baseConf | Get-ConfigOption -SectionName 'config' -OptionName 'set TARGET').Trim()
 if (-not $target) {
     Write-Error "The 'TARGET' option is not set in the install configuration."
     return
@@ -53,9 +60,16 @@ $runBat | Out-File -FilePath $runBatPath -Encoding ascii
 
 $progBatPath = "$tmpDir/prog.bat" # This is run in Windows 98
 $progBat = @"
+@echo off
+ECHO Starting "$fullProgramName"...
 CD "$targetDir"
-START /w "$target"
-C:\WINDOWS\RUNDLL32.EXE SHELL32.DLL,SHExitWindowsEx 1
+START /WAIT "$($target.Trim())"
+REM PAUSE
+$(
+    if (!$NoExit.ToBool()) { 
+        'C:\WINDOWS\RUNDLL32.EXE SHELL32.DLL,SHExitWindowsEx 1' 
+    }
+)
 "@.Trim() -replace "\r?\n", "`r`n" # IMPORTANT: must use DOS line endings or it won't work
 $progBat | Out-File -FilePath $progBatPath -Encoding ascii
 
@@ -83,6 +97,9 @@ mount b $tmpDir
 COPY B:\RUN.BAT A:\
 COPY B:\PROG.BAT A:\
 COPY Z:\BIN\SHUTDOWN.COM A:\
+mount -u b
+mount b $PSScriptRoot/utils -t floppy
+COPY B:\ATM\ATM30.EXE A:\
 mount -u b
 
 # Make it so that when the guest OS boots, it will run the A:\RUN.BAT script

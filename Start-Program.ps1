@@ -40,7 +40,17 @@ if (-not $target) {
     Write-Error "The 'TARGET' option is not set in the install configuration."
     return
 }
-$targetDir = $target.Substring(0, $target.LastIndexOf("\"))
+
+if ($target -like "*.exe*") {
+    $parts = ($target.Trim() -split '.exe')
+    $exePath = $parts[0] + '.EXE'
+    $rest = $target.Substring($exePath.Length).Trim()
+    $targetDir = $exePath.Substring(0, $exePath.LastIndexOf("\"))
+} else {
+    $exePath = $target
+    $rest = ''
+    $targetDir = $exePath.Substring(0, $exePath.LastIndexOf("\"))
+}
 
 $tmpDir = "$userProgramDir/tmp"
 if (-not (Test-Path -Path $tmpDir)) {
@@ -63,7 +73,7 @@ $progBat = @"
 @echo off
 ECHO Starting "$fullProgramName"...
 CD "$targetDir"
-START /WAIT "$($target.Trim())"
+START /WAIT "$exePath" $rest
 REM PAUSE
 $(
     if (!$NoExit.ToBool()) { 

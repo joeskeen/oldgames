@@ -8,7 +8,11 @@ function New-DesktopEntry {
         [string]$ProgramName,
 
         [Parameter(Mandatory = $true)]
-        [string]$IconPath
+        [string]$IconPath,
+
+        [Parameter()]
+        [ValidateSet('user','system')]
+        [string]$Scope = 'user'
     )
 
     $rootPath = Get-OldGamesRoot
@@ -18,7 +22,20 @@ function New-DesktopEntry {
         throw "Program directory '$programDir' does not exist."
     }
 
-    $desktopEntryPath = [System.IO.Path]::Join($programDir, "$ProgramDirName.desktop")
+    $desktopEntryDir = switch($Scope) {
+        'system' {
+            $programDir
+        }
+        'user' {
+            [System.IO.Path]::Join($HOME, ".config/oldgames/programs/$ProgramDirName")
+        }
+    }
+
+    if (-not (Test-Path -Path $desktopEntryDir)) {
+        New-Item -Path $desktopEntryDir -ItemType Directory -Force
+    }
+
+    $desktopEntryPath = [System.IO.Path]::Join($desktopEntryDir, "$ProgramDirName.desktop")
 
     $desktopEntry = @"
 [Desktop Entry]

@@ -18,5 +18,7 @@ if (-not (Test-Path -Path $programsDir)) {
 $programs = Get-ChildItem -Path $programsDir -Directory
 $programs | ForEach-Object {
     $programDirName = $_.Name
+    $fullName = Get-ProgramFullName -ProgramDirName $programDirName
+    Write-Host "Installing program '$fullName'..."
     Install-Program -ProgramDirName $programDirName -InstallScope $InstallScope
 }

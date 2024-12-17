@@ -24,7 +24,21 @@ if (-not (Test-Path -Path $programDir)) {
 }
 
 $DiskImages = $DiskImagePaths | ForEach-Object { 
-    (Copy-Item -Path $_ -Destination $programDir -PassThru).Name 
+    $src = $_
+    $srcDir = Split-Path -Parent -Path $src
+    $fileName = Split-Path -Leaf -Path $src
+    $dst = "$programDir/$fileName"
+    Copy-Item -Path $src -Destination $dst
+    if ($fileName.ToLower() -match '\.cue$') {
+        $binFile = [System.IO.Path]::GetFileNameWithoutExtension($fileName) + '.bin'
+        Copy-Item -Path "$srcDir/$binFile" -Destination $programDir
+        $cueContents = Get-Content -Path $dst
+        if ($cueContents -match 'FILE "(.*)" BINARY') {
+            $cueContents = $cueContents -replace 'FILE "(.*)" BINARY', "FILE `"$binFile`" BINARY"
+            $cueContents | Out-File -FilePath $dst
+        }
+    }
+    Write-Output $fileName
 }
 
 $hddImgName = "hdd.vhd"

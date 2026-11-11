@@ -21,7 +21,7 @@ if (-not (Test-Path -Path $programDir)) {
 }
 $discImages = Get-ChildItem -Path $programDir -File | Where-Object { $_.Extension -in ".iso",".cue" } | Sort-Object -Property Name
 
-$userDir = "~/.config/oldgames"
+$userDir = [System.IO.Path]::Join($HOME, '.config', 'oldgames')
 if (-not (Test-Path -Path $userDir)) {
     New-Item -Path $userDir -ItemType Directory -Force | Out-Null
 }

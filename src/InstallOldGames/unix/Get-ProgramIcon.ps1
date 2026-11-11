@@ -103,7 +103,7 @@ Choose which icon to use:
             $iconFile = $allIcons[$iconChoice - 1].FullName
             $outputFile = "$programDir/icon.png"
             $size = 256
-            convert -resize x${size} -gravity center -crop ${size}x${size}+0+0 "$iconFile" -flatten -colors 256 -background transparent -filter Point "$outputFile"
+            convert -background none -filter Point -resize x${size} -gravity center -crop ${size}x${size}+0+0 "$iconFile" -flatten -colors 256 "$outputFile"
             break
         }
     }

@@ -38,7 +38,7 @@ function Install-Program {
     $desktopEntryPath = [System.IO.Path]::Join($desktopEntrySrcDir, "$ProgramDirName.desktop")
     if (-not (Test-Path -Path $desktopEntryPath)) {
         Write-Host "Creating desktop entry..."
-        New-DesktopEntry -ProgramDirName $ProgramDirName -ProgramName $fullProgramName -IconPath $iconPath -Scope $InstallScope
+        New-DesktopEntry -ProgramDirName $ProgramDirName -ProgramName $fullProgramName -IconPath $iconPath -Scope $InstallScope -DosBoxXCommand $DosBoxXCommand
     }
     $desktopEntryDir = switch($InstallScope) {
         'system' {

@@ -12,7 +12,13 @@ function New-DesktopEntry {
 
         [Parameter()]
         [ValidateSet('user','system')]
-        [string]$Scope = 'user'
+        [string]$Scope = 'user',
+
+        # How to launch DOSBox-X. Embedded into the desktop entry so that it
+        # works even when the desktop session does not have OLDGAMES_DOSBOX_X
+        # set (desktop entries do not inherit variables from your shell).
+        [Parameter()]
+        [string[]]$DosBoxXCommand
     )
 
     $rootPath = Get-OldGamesRoot
@@ -37,10 +43,15 @@ function New-DesktopEntry {
 
     $desktopEntryPath = [System.IO.Path]::Join($desktopEntryDir, "$ProgramDirName.desktop")
 
+    $execCommand = "`"$startProgramScriptPath`" $ProgramDirName"
+    if ($DosBoxXCommand) {
+        $execCommand += " -DosBoxXCommand `"$($DosBoxXCommand -join ' ')`""
+    }
+
     $desktopEntry = @"
 [Desktop Entry]
 Name=$ProgramName
-Exec=$startProgramScriptPath $ProgramDirName
+Exec=$execCommand
 Icon=$IconPath
 Type=Application
 Categories=Game;

@@ -76,7 +76,13 @@ All of these steps are done in the root directory of this repository.
 
 ## Installing Desktop Entries
 
-Run `./Install.ps1` to create a desktop entry for every program in the `programs` directory, so the games show up in your application menu. The entry runs `Start-Program.ps1` and uses the program's icon. Pass `-InstallScope system` to install the entries for all users (requires write access to `/usr/share/applications`).
+Run `./Install.ps1` to create a desktop entry for every program in the `programs` directory, so the games show up in your application menu. The entry runs `Start-Program.ps1` and uses the program's icon. If DOSBox-X is not on your `PATH` (for example, a Flatpak install), pass the same `-DosBoxXCommand` you use elsewhere — it is embedded into the entry, because desktop sessions do not inherit environment variables from your shell:
+
+```powershell
+./Install.ps1 -DosBoxXCommand "flatpak run com.dosbox_x.DOSBox-X"
+```
+
+Pass `-InstallScope system` to install the entries for all users (requires write access to `/usr/share/applications`).
 
 ## License
 

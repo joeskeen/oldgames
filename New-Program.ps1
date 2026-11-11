@@ -11,11 +11,18 @@ param(
     [string]$EnvType = 'win9x',
 
     [Parameter()]
-    [string[]]$DiskImagePaths = @()
+    [string[]]$DiskImagePaths = @(),
+
+    # How to launch DOSBox-X. Defaults to $env:OLDGAMES_DOSBOX_X or 'dosbox-x'.
+    # For a Flatpak install: -DosBoxXCommand 'flatpak run com.dosbox_x.DOSBox-X'
+    [Parameter()]
+    [string[]]$DosBoxXCommand
 )
 
 Import-Module "$PSScriptRoot/src/PSDosBoxXConf" -Force
 Import-Module "$PSScriptRoot/src/InstallOldGames" -Force
+
+$dosboxX = Get-DosBoxXCommand -Command $DosBoxXCommand
 
 $normalizedName = $ProgramName.Trim().ToLower() -replace '[^A-Za-z0-9]', '-'
 $programDir = "$PSScriptRoot/programs/$normalizedName"
@@ -49,9 +56,23 @@ $envSettings = @{
     BaseHddImg = "$envDir/hdd.vhd"
 }
 
+if (-not (Test-Path -Path $envSettings.BaseConfPath)) {
+    Write-Error "The base DOSBox-X configuration '$($envSettings.BaseConfPath)' does not exist."
+    return
+}
+if (-not (Test-Path -Path $envSettings.BaseHddImg)) {
+    Write-Error "The base hard drive image '$($envSettings.BaseHddImg)' does not exist. Complete the initial Windows 98 setup described in the Readme first."
+    return
+}
+
 $progHddImg = "$programDir/$hddImgName"
-if ((Test-Path -Path $progHddImg) -and (Read-Host "A hard drive image already exists. Overwrite? (y/n)") -eq 'y') {
-    Remove-Item -Path $progHddImg    
+if (Test-Path -Path $progHddImg) {
+    if ((Read-Host "A hard drive image already exists. Overwrite? (y/n)") -eq 'y') {
+        Remove-Item -Path $progHddImg
+    } else {
+        Write-Host "Keeping the existing hard drive image. Nothing to do."
+        return
+    }
 }
 
 $baseImgRelativePath = Resolve-Path -Path $envSettings.BaseHddImg -Relative -RelativeBasePath $programDir
@@ -72,8 +93,9 @@ $installConfig = Import-DosBoxXConf -Path $envSettings.BaseConfPath
 $progInstallConfPath = "$programDir/install.dosbox-x.conf"
 $installConfig | Export-DosBoxXConf -Path $progInstallConfPath
 
+$installArgs = @($dosboxX.Arguments) + @('-conf', "`"$progInstallConfPath`"")
 do {
-    Start-Process -WorkingDirectory $programDir -FilePath "dosbox-x" -ArgumentList "-conf $progInstallConfPath" -Wait
+    Start-Process -WorkingDirectory $programDir -FilePath $dosboxX.FilePath -ArgumentList $installArgs -Wait
 } while ((Read-Host "Reboot DosBox-X to finish installing? (y/n)") -ne 'n')
 
 $programCommand = Read-Host "Enter the command to run the program (full path)"
@@ -95,4 +117,4 @@ Export-DosBoxXConf -Config $runConfig -Path "$programDir/dosbox-x.conf"
 
 $ProgramName | Out-File -FilePath "$programDir/program-name.txt"
 
-Get-ProgramIcon -ProgramDirName $normalizedName
+Get-ProgramIcon -ProgramDirName $normalizedName -DosBoxXCommand $DosBoxXCommand

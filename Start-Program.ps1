@@ -6,7 +6,12 @@ param(
     [string]$ProgramDirName,
 
     [Parameter()]
-    [switch]$NoExit
+    [switch]$NoExit,
+
+    # How to launch DOSBox-X. Defaults to $env:OLDGAMES_DOSBOX_X or 'dosbox-x'.
+    # For a Flatpak install: -DosBoxXCommand 'flatpak run com.dosbox_x.DOSBox-X'
+    [Parameter()]
+    [string[]]$DosBoxXCommand
 )
 
 $programDir = "$PSScriptRoot/programs/$ProgramDirName"
@@ -29,27 +34,56 @@ $relativeProgramDir = Resolve-Path -Path $programDir -Relative -RelativeBasePath
 Import-Module "$PSScriptRoot/src/PSDosBoxXConf" -Force
 Import-Module "$PSScriptRoot/src/InstallOldGames" -Force
 
+$dosboxX = Get-DosBoxXCommand -Command $DosBoxXCommand
+
 $fullProgramName = Get-ProgramFullName -ProgramDirName $ProgramDirName
 Write-Host "Starting program '$fullProgramName'..."
 
 $baseConfPath = "$programDir/dosbox-x.conf"
 
 $baseConf = Import-DosBoxXConf -Path $baseConfPath
-$target = ($baseConf | Get-ConfigOption -SectionName 'config' -OptionName 'set TARGET').Trim()
+$target = $baseConf | Get-ConfigOption -SectionName 'config' -OptionName 'set TARGET'
 if (-not $target) {
     Write-Error "The 'TARGET' option is not set in the install configuration."
     return
 }
+$target = $target.Trim()
 
-if ($target -like "*.exe*") {
-    $parts = ($target.Trim() -split '.exe')
-    $exePath = $parts[0] + '.EXE'
-    $rest = $target.Substring($exePath.Length).Trim()
-    $targetDir = $exePath.Substring(0, $exePath.LastIndexOf("\"))
+# The TARGET value is a Windows path to the program, optionally followed by
+# command-line arguments, e.g. 'C:\GAMES\DOOM\DOOM.EXE -warp 1'. Paths with
+# spaces are quoted, as they appear in the Windows 98 properties dialog.
+$exePath = $null
+$rest = ''
+
+$quotedMatch = [regex]::Match($target, '^(?<exe>"[^"]+")(?<rest>\s.*)?$')
+if ($quotedMatch.Success) {
+    $exePath = $quotedMatch.Groups['exe'].Value.Trim('"')
+    $rest = $quotedMatch.Groups['rest'].Value.Trim()
 } else {
-    $exePath = $target
-    $rest = ''
-    $targetDir = $exePath.Substring(0, $exePath.LastIndexOf("\"))
+    # The path may contain more than one '.exe', so match the first occurrence
+    # that is followed by whitespace or the end of the string, case-insensitively
+    # ('.EXE' is just as valid as '.exe' on Windows 9x).
+    $exeMatch = [regex]::Match(
+        $target,
+        '^(?<exe>.+?\.exe)(?<rest>\s.*)?$',
+        [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+    )
+    if ($exeMatch.Success) {
+        $exePath = $exeMatch.Groups['exe'].Value
+        $rest = $exeMatch.Groups['rest'].Value.Trim()
+    } else {
+        # Not an .exe (e.g. a .bat or .com launcher): the first token is the
+        # program and everything after it is the argument list.
+        $targetParts = $target -split '\s+', 2
+        $exePath = $targetParts[0]
+        $rest = if ($targetParts.Count -gt 1) { $targetParts[1].Trim() } else { '' }
+    }
+}
+
+$targetDir = if ($exePath.Contains('\')) {
+    $exePath.Substring(0, $exePath.LastIndexOf('\'))
+} else {
+    ''
 }
 
 $tmpDir = "$userProgramDir/tmp"
@@ -69,10 +103,11 @@ echo Done (this line needs to be here or the 'win' command will not work for som
 $runBat | Out-File -FilePath $runBatPath -Encoding ascii
 
 $progBatPath = "$tmpDir/prog.bat" # This is run in Windows 98
+$cdLine = if ($targetDir) { "CD `"$targetDir`"" } else { 'REM The target has no directory to switch to' }
 $progBat = @"
 @echo off
 ECHO Starting "$fullProgramName"...
-CD "$targetDir"
+$cdLine
 START /WAIT "$exePath" $rest
 REM PAUSE
 $(
@@ -132,4 +167,5 @@ $config = $baseConf
 
 $config | Export-DosBoxXConf -Path "$userProgramDir/user.dosbox-x.conf"
 
-Start-Process -WorkingDirectory $userProgramDir -FilePath "dosbox-x" -ArgumentList "-conf user.dosbox-x.conf" -Wait
+$dosboxArgs = @($dosboxX.Arguments) + @('-conf', 'user.dosbox-x.conf')
+Start-Process -WorkingDirectory $userProgramDir -FilePath $dosboxX.FilePath -ArgumentList $dosboxArgs -Wait

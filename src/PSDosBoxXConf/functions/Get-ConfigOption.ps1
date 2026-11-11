@@ -11,7 +11,7 @@ function Get-ConfigOption {
         [System.Collections.Specialized.OrderedDictionary]$Config
     )
 
-    if ($null -eq $OptionName) {
+    if ([string]::IsNullOrEmpty($OptionName)) {
         Write-Output $Config[$SectionName]
     } elseif ($null -ne $Config[$SectionName]) {
         Write-Output $Config[$SectionName][$OptionName]

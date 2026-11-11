@@ -5,7 +5,11 @@ function Get-ProgramIcon {
         [string]$ProgramDirName,
 
         [Parameter(Mandatory = $false)]
-        [switch]$Force
+        [switch]$Force,
+
+        # How to launch DOSBox-X. Defaults to $env:OLDGAMES_DOSBOX_X or 'dosbox-x'.
+        [Parameter()]
+        [string[]]$DosBoxXCommand
     )
 
     $root = Get-OldGamesRoot
@@ -14,6 +18,8 @@ function Get-ProgramIcon {
     if (-not (Test-Path -Path $programDir)) {
         throw "Program directory '$programDir' does not exist."
     }
+
+    $dosboxX = Get-DosBoxXCommand -Command $DosBoxXCommand
 
     $iconPath = [System.IO.Path]::Join($programDir, "icon.png")
     if ((Test-Path -Path $iconPath) -and -not $Force) {
@@ -47,8 +53,8 @@ function Get-ProgramIcon {
             DELTREE D:\PROGRA~1\WINDOW~1 /Y
 "@ -split [System.Environment]::NewLine  | ForEach-Object { "-c `"$($_.Trim().Replace('"', '\"'))`"" }
         $pargs = "-silent $($commands -join ' ')"
-        Write-Host "Running 'dosbox-x $pargs'..."
-        Start-Process -FilePath "dosbox-x" -ArgumentList $pargs -Wait
+        Write-Host "Running '$($dosboxX.FilePath) $($dosboxX.Arguments -join ' ') $pargs'..."
+        Start-Process -FilePath $dosboxX.FilePath -ArgumentList (@($dosboxX.Arguments) + @($pargs)) -Wait
         $exeFiles = Get-ChildItem -Path $mountPoint -Recurse -Include "*.EXE", "*.exe" | Where-Object { $_.FullName -notlike "*windows*" -and $_.FullName -notlike "*win98*" }
         $exeFiles | ForEach-Object {
             $exe = $_

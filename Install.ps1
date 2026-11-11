@@ -4,7 +4,11 @@
 param(
     [Parameter()]
     [ValidateSet('user','system')]
-    [string]$InstallScope = 'user'
+    [string]$InstallScope = 'user',
+
+    # How to launch DOSBox-X. Defaults to $env:OLDGAMES_DOSBOX_X or 'dosbox-x'.
+    [Parameter()]
+    [string[]]$DosBoxXCommand
 )
 
 Import-Module "$PSScriptRoot/src/InstallOldGames" -Force
@@ -20,5 +24,5 @@ $programs | ForEach-Object {
     $programDirName = $_.Name
     $fullName = Get-ProgramFullName -ProgramDirName $programDirName
     Write-Host "Installing program '$fullName'..."
-    Install-Program -ProgramDirName $programDirName -InstallScope $InstallScope
+    Install-Program -ProgramDirName $programDirName -InstallScope $InstallScope -DosBoxXCommand $DosBoxXCommand
 }

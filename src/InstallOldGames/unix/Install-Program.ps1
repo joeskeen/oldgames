@@ -6,7 +6,11 @@ function Install-Program {
 
         [Parameter(Mandatory = $true)]
         [ValidateSet('user','system')]
-        [string]$InstallScope
+        [string]$InstallScope,
+
+        # How to launch DOSBox-X. Defaults to $env:OLDGAMES_DOSBOX_X or 'dosbox-x'.
+        [Parameter()]
+        [string[]]$DosBoxXCommand
     )
 
     $root = Get-OldGamesRoot
@@ -20,7 +24,7 @@ function Install-Program {
     $iconPath = [System.IO.Path]::Join($programDir, "icon.png")
     if (-not (Test-Path -Path $iconPath)) {
         Write-Host "Program icon not found. Searching..."
-        Get-ProgramIcon -ProgramDirName $ProgramDirName
+        Get-ProgramIcon -ProgramDirName $ProgramDirName -DosBoxXCommand $DosBoxXCommand
     }
 
     $desktopEntrySrcDir = switch($InstallScope) {

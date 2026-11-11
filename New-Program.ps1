@@ -93,9 +93,9 @@ $installConfig = Import-DosBoxXConf -Path $envSettings.BaseConfPath
 $progInstallConfPath = "$programDir/install.dosbox-x.conf"
 $installConfig | Export-DosBoxXConf -Path $progInstallConfPath
 
-$installArgs = @($dosboxX.Arguments) + @('-conf', "`"$progInstallConfPath`"")
+$installArgs = @('-conf', "`"$progInstallConfPath`"")
 do {
-    Start-Process -WorkingDirectory $programDir -FilePath $dosboxX.FilePath -ArgumentList $installArgs -Wait
+    Start-DosBoxX -Command $dosboxX -WorkingDirectory $programDir -Arguments $installArgs -Wait
 } while ((Read-Host "Reboot DosBox-X to finish installing? (y/n)") -ne 'n')
 
 $programCommand = Read-Host "Enter the command to run the program (full path)"

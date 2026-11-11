@@ -21,6 +21,16 @@ function Get-ProgramIcon {
 
     $dosboxX = Get-DosBoxXCommand -Command $DosBoxXCommand
 
+    $hasWrestool = $null -ne (Get-Command wrestool -ErrorAction SilentlyContinue)
+    $hasConvert = $null -ne (Get-Command convert -ErrorAction SilentlyContinue)
+    if (-not $hasWrestool) {
+        Write-Warning "wrestool was not found (install icoutils); only .ICO files can be extracted from the images."
+    }
+    if (-not $hasConvert) {
+        Write-Warning "ImageMagick's convert was not found; an icon cannot be generated."
+        return
+    }
+
     $iconPath = [System.IO.Path]::Join($programDir, "icon.png")
     if ((Test-Path -Path $iconPath) -and -not $Force) {
         Write-Host "Found icon at '$iconPath'."
@@ -30,10 +40,14 @@ function Get-ProgramIcon {
     $searchImgs = @((Get-ChildItem -Path $programDir | Where-Object { $_.Extension -in @('.iso', '.img', '.cue') } | ForEach-Object { $_.FullName }), "$programDir/hdd.vhd") | ForEach-Object { $_ }
     foreach ($img in $searchImgs) {
         Write-Host "Searching for icons in '$($img)'..."
-        $mountPoint = "/tmp/oldgamesmnt"
-        $iconDir = "$mountPoint/icons"
-        rm -rf $mountPoint/*
-        mkdir -p $mountPoint/icons/
+        # Keep the mount point inside $HOME: Flatpak apps get a private /tmp,
+        # so files DOSBox-X writes under /tmp would never reach this script.
+        $mountPoint = [System.IO.Path]::Join($HOME, '.cache', 'oldgames', 'icon-search')
+        $iconDir = [System.IO.Path]::Join($mountPoint, 'icons')
+        if (Test-Path -Path $mountPoint) {
+            Get-ChildItem -Path $mountPoint -Force | Remove-Item -Recurse -Force
+        }
+        New-Item -Path $iconDir -ItemType Directory -Force | Out-Null
         $commands = @" 
             imgmount c "$($img)" -ro
             mount d "$mountPoint" -nocachedir
@@ -54,22 +68,24 @@ function Get-ProgramIcon {
 "@ -split [System.Environment]::NewLine  | ForEach-Object { "-c `"$($_.Trim().Replace('"', '\"'))`"" }
         $pargs = "-silent $($commands -join ' ')"
         Write-Host "Running '$($dosboxX.FilePath) $($dosboxX.Arguments -join ' ') $pargs'..."
-        Start-Process -FilePath $dosboxX.FilePath -ArgumentList (@($dosboxX.Arguments) + @($pargs)) -Wait
-        $exeFiles = Get-ChildItem -Path $mountPoint -Recurse -Include "*.EXE", "*.exe" | Where-Object { $_.FullName -notlike "*windows*" -and $_.FullName -notlike "*win98*" }
-        $exeFiles | ForEach-Object {
-            $exe = $_
-            $icons = wrestool -l $exe.FullName --type=14 | ForEach-Object { [System.Text.RegularExpressions.Regex]::Match($_, "--name=([^ ]*)").Groups[1].Value }
-            foreach ($icon in $icons) {
-                $target = "$iconDir/$($exe.Name).$icon.ico"
-                wrestool -x $exe.FullName --type=14 --name=$icon > $target
-                if (-not (Get-Item $target).Length) {
+        Start-DosBoxX -Command $dosboxX -Arguments @($pargs) -Wait
+        if ($hasWrestool) {
+            $exeFiles = Get-ChildItem -Path $mountPoint -Recurse -Include "*.EXE", "*.exe" | Where-Object { $_.FullName -notlike "*windows*" -and $_.FullName -notlike "*win98*" }
+            $exeFiles | ForEach-Object {
+                $exe = $_
+                $icons = wrestool -l $exe.FullName --type=14 | ForEach-Object { [System.Text.RegularExpressions.Regex]::Match($_, "--name=([^ ]*)").Groups[1].Value }
+                foreach ($icon in $icons) {
+                    $target = "$iconDir/$($exe.Name).$icon.ico"
+                    wrestool -x $exe.FullName --type=14 --name=$icon > $target
+                    if ((Test-Path -Path $target) -and -not (Get-Item $target).Length) {
+                        Remove-Item $target
+                    }
+                }
+                $target = "$iconDir/$($exe.Name).ico"
+                wrestool -x $exe.FullName > $target
+                if ((Test-Path -Path $target) -and -not (Get-Item $target).Length) {
                     Remove-Item $target
                 }
-            }
-            $target = "$iconDir/$($exe.Name).ico"
-            wrestool -x $exe.FullName > $target
-            if (-not (Get-Item $target).Length) {
-                Remove-Item $target
             }
         }
         $allIcons = Get-ChildItem -Path $mountPoint -Recurse -Include '*.ICO', '*.ico' | Where-Object { $_.FullName -notlike "*windows*" -and $_.FullName -notlike "*win98*" } | Sort-Object { $_.Name }

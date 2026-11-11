@@ -167,5 +167,4 @@ $config = $baseConf
 
 $config | Export-DosBoxXConf -Path "$userProgramDir/user.dosbox-x.conf"
 
-$dosboxArgs = @($dosboxX.Arguments) + @('-conf', 'user.dosbox-x.conf')
-Start-Process -WorkingDirectory $userProgramDir -FilePath $dosboxX.FilePath -ArgumentList $dosboxArgs -Wait
+Start-DosBoxX -Command $dosboxX -WorkingDirectory $userProgramDir -Arguments @('-conf', 'user.dosbox-x.conf') -Wait

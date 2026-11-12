@@ -1,5 +1,5 @@
 function New-DesktopEntry {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [Parameter(Mandatory = $true)]
         [string]$ProgramDirName,
@@ -10,6 +10,9 @@ function New-DesktopEntry {
         [Parameter(Mandatory = $true)]
         [string]$IconPath,
 
+        # 'user' writes to ~/.local/share/applications (per machine);
+        # 'system' writes to /usr/share/applications (all accounts on the
+        # machine, requires write access there).
         [Parameter()]
         [ValidateSet('user','system')]
         [string]$Scope = 'user',
@@ -28,22 +31,39 @@ function New-DesktopEntry {
         throw "Program directory '$programDir' does not exist."
     }
 
+    # Desktop entries are machine-local: they name the Start-Program.ps1 path
+    # and, optionally, the DOSBox-X command for this machine. They must not be
+    # stored in the shared per-user data directory on a NAS.
     $desktopEntryDir = switch($Scope) {
         'system' {
-            $programDir
+            "/usr/share/applications"
         }
         'user' {
-            [System.IO.Path]::Join($HOME, ".config/oldgames/programs/$ProgramDirName")
+            [System.IO.Path]::Join($HOME, ".local", "share", "applications")
         }
     }
 
     if (-not (Test-Path -Path $desktopEntryDir)) {
-        New-Item -Path $desktopEntryDir -ItemType Directory -Force
+        New-Item -Path $desktopEntryDir -ItemType Directory -Force | Out-Null
     }
 
     $desktopEntryPath = [System.IO.Path]::Join($desktopEntryDir, "$ProgramDirName.desktop")
 
-    $execCommand = "`"$startProgramScriptPath`" $ProgramDirName"
+    # Invoke pwsh explicitly rather than relying on the script's shebang. This
+    # keeps the entry working when the repository is on a noexec NAS mount and
+    # does not depend on the script's executable bit.
+    $resolvedPwsh = Get-Command -Name pwsh -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($resolvedPwsh) {
+        $pwshPath = $resolvedPwsh.Source
+    } else {
+        $pwshPath = [System.IO.Path]::Join($PSHOME, 'pwsh')
+        if (-not (Test-Path -LiteralPath $pwshPath)) {
+            throw "Could not find the pwsh executable to embed in the desktop entry."
+        }
+    }
+
+    $execCommand = "`"$pwshPath`" `"$startProgramScriptPath`" `"$ProgramDirName`""
     if ($DosBoxXCommand) {
         $execCommand += " -DosBoxXCommand `"$($DosBoxXCommand -join ' ')`""
     }
@@ -58,5 +78,8 @@ Categories=Game;
 Terminal=false
 "@
 
-    Set-Content -Path $desktopEntryPath -Value $desktopEntry
+    if ($PSCmdlet.ShouldProcess($desktopEntryPath, 'Write desktop entry')) {
+        Set-Content -Path $desktopEntryPath -Value $desktopEntry
+    }
+    Write-Output $desktopEntryPath
 }

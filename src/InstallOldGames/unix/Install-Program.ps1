@@ -27,31 +27,6 @@ function Install-Program {
         Get-ProgramIcon -ProgramDirName $ProgramDirName -DosBoxXCommand $DosBoxXCommand
     }
 
-    $desktopEntrySrcDir = switch($InstallScope) {
-        'system' {
-            $programDir
-        }
-        'user' {
-            "$HOME/.config/oldgames/programs/$ProgramDirName"
-        }
-    }
-    $desktopEntryPath = [System.IO.Path]::Join($desktopEntrySrcDir, "$ProgramDirName.desktop")
-    if (-not (Test-Path -Path $desktopEntryPath)) {
-        Write-Host "Creating desktop entry..."
-        New-DesktopEntry -ProgramDirName $ProgramDirName -ProgramName $fullProgramName -IconPath $iconPath -Scope $InstallScope -DosBoxXCommand $DosBoxXCommand
-    }
-    $desktopEntryDir = switch($InstallScope) {
-        'system' {
-            "/usr/share/applications"
-        }
-        'user' {
-            "$HOME/.local/share/applications"
-        }
-    }
-    if (-not (Test-Path -Path $desktopEntryDir)) {
-        mkdir -p $desktopEntryDir
-    }
-    $desktopEntryDest = [System.IO.Path]::Join($desktopEntryDir, "$ProgramDirName.desktop")
-    
-    cp $desktopEntryPath $desktopEntryDest
+    Write-Host "Creating desktop entry..."
+    New-DesktopEntry -ProgramDirName $ProgramDirName -ProgramName $fullProgramName -IconPath $iconPath -Scope $InstallScope -DosBoxXCommand $DosBoxXCommand
 }

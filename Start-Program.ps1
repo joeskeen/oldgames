@@ -11,8 +11,17 @@ param(
     # How to launch DOSBox-X. Defaults to $env:OLDGAMES_DOSBOX_X or 'dosbox-x'.
     # For a Flatpak install: -DosBoxXCommand 'flatpak run com.dosbox_x.DOSBox-X'
     [Parameter()]
-    [string[]]$DosBoxXCommand
+    [string[]]$DosBoxXCommand,
+
+    # Where per-user savedata lives. Overrides /etc/oldgames/config.json,
+    # ~/.config/oldgames/config.json and OLDGAMES_USER_DATA_ROOT. See
+    # Get-OldGamesConfig for the full precedence order.
+    [Parameter()]
+    [string]$UserDataRoot
 )
+
+Import-Module "$PSScriptRoot/src/PSDosBoxXConf" -Force
+Import-Module "$PSScriptRoot/src/InstallOldGames" -Force
 
 $programDir = "$PSScriptRoot/programs/$ProgramDirName"
 if (-not (Test-Path -Path $programDir)) {
@@ -21,8 +30,18 @@ if (-not (Test-Path -Path $programDir)) {
 }
 $discImages = Get-ChildItem -Path $programDir -File | Where-Object { $_.Extension -in ".iso",".cue" } | Sort-Object -Property Name
 
-$userDir = [System.IO.Path]::Join($HOME, '.config', 'oldgames')
+$oldGamesConfig = Get-OldGamesConfig -UserDataRoot $UserDataRoot
+$userDir = $oldGamesConfig.UserDataRoot
 if (-not (Test-Path -Path $userDir)) {
+    $userDirParent = Split-Path -Parent $userDir
+    if (-not (Test-Path -LiteralPath $userDirParent)) {
+        if ($oldGamesConfig.IsDefault) {
+            New-Item -Path $userDirParent -ItemType Directory -Force | Out-Null
+        } else {
+            Write-Error "The user data directory '$userDir' is not available because its parent '$userDirParent' does not exist. If this is a NAS path, make sure the NAS is mounted."
+            return
+        }
+    }
     New-Item -Path $userDir -ItemType Directory -Force | Out-Null
 }
 $userProgramDir = "$userDir/programs/$ProgramDirName"
@@ -30,9 +49,6 @@ if (-not (Test-Path -Path $userProgramDir)) {
     New-Item -Path $userProgramDir -ItemType Directory -Force | Out-Null
 }
 $relativeProgramDir = Resolve-Path -Path $programDir -Relative -RelativeBasePath $userProgramDir
-
-Import-Module "$PSScriptRoot/src/PSDosBoxXConf" -Force
-Import-Module "$PSScriptRoot/src/InstallOldGames" -Force
 
 $dosboxX = Get-DosBoxXCommand -Command $DosBoxXCommand
 
@@ -91,6 +107,41 @@ if (-not (Test-Path -Path $tmpDir)) {
     New-Item -Path $tmpDir -ItemType Directory -Force | Out-Null
 }
 
+$envType = $baseConf | Get-ConfigOption -SectionName 'config' -OptionName 'set ENV_TYPE'
+if (-not $envType) {
+    # Programs installed before environment types existed are Windows 9x.
+    $envType = 'win9x'
+}
+$envType = $envType.Trim().ToLower()
+
+switch ($envType) {
+    'dos' {
+        $dosMode = $baseConf | Get-ConfigOption -SectionName 'config' -OptionName 'set DOS_MODE'
+        if (-not $dosMode) { $dosMode = 'shell' }
+        $dosMode = $dosMode.Trim().ToLower()
+
+        if ($dosMode -eq 'boot') {
+            # CDVOL.COM mirrors the guest's MSCDEX CD volume command to the
+            # Sound Blaster mixer; DOSBox-X ignores the guest ATAPI volume.
+            Copy-Item -Path "$PSScriptRoot/utils/cdvol/CDVOL.COM" -Destination "$tmpDir/CDVOL.COM" -Force
+        }
+
+        $plan = Get-DosLaunchPlan `
+            -Mode $dosMode `
+            -RelativeProgramDir $relativeProgramDir `
+            -DiscImageNames ($discImages | ForEach-Object { $_.Name }) `
+            -TargetDir $targetDir `
+            -ExePath $exePath `
+            -Rest $rest `
+            -TmpDir $tmpDir `
+            -ExitWhenDone:(-not $NoExit.IsPresent)
+
+        foreach ($fileName in $plan.Files.Keys) {
+            $plan.Files[$fileName] | Out-File -FilePath "$tmpDir/$fileName" -Encoding ascii
+        }
+        $autoexec = $plan.AutoExec
+    }
+    'win9x' {
 $runBatPath = "$tmpDir/run.bat" # This is run in MS-DOS
 $runBat = @"
 @echo on
@@ -161,9 +212,28 @@ imgmount
 ECHO Run "BOOT C:" to start the program
 BOOT C:
 "@
+    }
+    default {
+        Write-Error "Unsupported environment type '$envType' in '$baseConfPath'."
+        return
+    }
+}
 
 $config = $baseConf
-| Set-ConfigOption -SectionName 'autoexec' -Value $autoexec
+
+# The OpenCode MCP integration publishes the live debugger-control port here
+# (one server per client, so it is not always the default 58991). This is
+# machine-local state, so it deliberately stays under $HOME even when user
+# data lives on a NAS.
+$mcpPortFile = [System.IO.Path]::Join($HOME, '.config', 'oldgames', 'dosbox-mcp-port')
+if (Test-Path -Path $mcpPortFile) {
+    $mcpPort = (Get-Content -Path $mcpPortFile -Raw).Trim()
+    if ($mcpPort -match '^\d+$') {
+        $config = $config | Set-ConfigOption -SectionName 'dosbox' -OptionName 'mcp_server' -Value $mcpPort
+    }
+}
+
+$config = $config | Set-ConfigOption -SectionName 'autoexec' -Value $autoexec
 
 $config | Export-DosBoxXConf -Path "$userProgramDir/user.dosbox-x.conf"
 

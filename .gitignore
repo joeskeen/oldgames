@@ -5,3 +5,5 @@
 *.img
 dosbox-x/
 programs/
+*.local
+*.local.*

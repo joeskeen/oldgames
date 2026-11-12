@@ -6,9 +6,15 @@ param(
     [string]$ProgramName,
 
     [Parameter()]
-    # [ValidateSet('win9x','win3x', 'dos')] # TODO: Add support for Windows 3.x and DOS
-    [ValidateSet('win9x')]
+    # TODO: Add support for Windows 3.x ('win3x')
+    [ValidateSet('win9x', 'dos')]
     [string]$EnvType = 'win9x',
+
+    # DOS only: 'shell' runs the game from DOSBox-X's built-in DOS, 'boot'
+    # boots the DOS disk image first (some games only behave correctly then).
+    [Parameter()]
+    [ValidateSet('shell', 'boot')]
+    [string]$DosMode = 'shell',
 
     [Parameter()]
     [string[]]$DiskImagePaths = @(),
@@ -25,27 +31,16 @@ Import-Module "$PSScriptRoot/src/InstallOldGames" -Force
 $dosboxX = Get-DosBoxXCommand -Command $DosBoxXCommand
 
 $normalizedName = $ProgramName.Trim().ToLower() -replace '[^A-Za-z0-9]', '-'
+if ($ProgramName -match '\.(iso|cue|bin|img|ima)$' -or (Test-Path -LiteralPath $ProgramName)) {
+    throw "The first argument is the program name, not a disc image. Use -DiskImagePaths for the image, e.g.:`n  ./New-Program.ps1 -ProgramName 'My Game' -DiskImagePaths '$ProgramName'"
+}
 $programDir = "$PSScriptRoot/programs/$normalizedName"
 if (-not (Test-Path -Path $programDir)) {
     New-Item -Path $programDir -ItemType Directory
 }
 
-$DiskImages = $DiskImagePaths | ForEach-Object { 
-    $src = $_
-    $srcDir = Split-Path -Parent -Path $src
-    $fileName = Split-Path -Leaf -Path $src
-    $dst = "$programDir/$fileName"
-    Copy-Item -Path $src -Destination $dst
-    if ($fileName.ToLower() -match '\.cue$') {
-        $binFile = [System.IO.Path]::GetFileNameWithoutExtension($fileName) + '.bin'
-        Copy-Item -Path "$srcDir/$binFile" -Destination $programDir
-        $cueContents = Get-Content -Path $dst
-        if ($cueContents -match 'FILE "(.*)" BINARY') {
-            $cueContents = $cueContents -replace 'FILE "(.*)" BINARY', "FILE `"$binFile`" BINARY"
-            $cueContents | Out-File -FilePath $dst
-        }
-    }
-    Write-Output $fileName
+$DiskImages = $DiskImagePaths | ForEach-Object {
+    Import-DiskImage -Path $_ -DestinationDir $programDir
 }
 
 $hddImgName = "hdd.vhd"
@@ -61,17 +56,18 @@ if (-not (Test-Path -Path $envSettings.BaseConfPath)) {
     return
 }
 if (-not (Test-Path -Path $envSettings.BaseHddImg)) {
-    Write-Error "The base hard drive image '$($envSettings.BaseHddImg)' does not exist. Complete the initial Windows 98 setup described in the Readme first."
+    Write-Error "The base hard drive image '$($envSettings.BaseHddImg)' does not exist. Complete the initial setup for the '$EnvType' environment described in the Readme first."
     return
 }
 
 $progHddImg = "$programDir/$hddImgName"
+$installProgram = $true
 if (Test-Path -Path $progHddImg) {
     if ((Read-Host "A hard drive image already exists. Overwrite? (y/n)") -eq 'y') {
         Remove-Item -Path $progHddImg
     } else {
-        Write-Host "Keeping the existing hard drive image. Nothing to do."
-        return
+        Write-Host "Using the existing hard drive image (skipping the install step)."
+        $installProgram = $false
     }
 }
 
@@ -81,7 +77,7 @@ $installAutoexec = @"
 cls
 vhdmake -l $baseImgRelativePath $hddImgName
 imgmount c $hddImgName
-$($DiskImages | ForEach-Object { "imgmount d `"$_`" -t cdrom" })
+$($DiskImages | ForEach-Object { "imgmount d `"$_`" -t cdrom -ide 2m" })
 mount
 BOOT C:
 "@
@@ -94,14 +90,16 @@ $progInstallConfPath = "$programDir/install.dosbox-x.conf"
 $installConfig | Export-DosBoxXConf -Path $progInstallConfPath
 
 $installArgs = @('-conf', "`"$progInstallConfPath`"")
-do {
-    Start-DosBoxX -Command $dosboxX -WorkingDirectory $programDir -Arguments $installArgs -Wait
-} while ((Read-Host "Reboot DosBox-X to finish installing? (y/n)") -ne 'n')
+if ($installProgram) {
+    do {
+        Start-DosBoxX -Command $dosboxX -WorkingDirectory $programDir -Arguments $installArgs -Wait
+    } while ((Read-Host "Reboot DosBox-X to finish installing? (y/n)") -ne 'n')
+}
 
 $programCommand = Read-Host "Enter the command to run the program (full path)"
 $runAutoexec = @"
 imgmount c $hddImgName
-$($DiskImages | ForEach-Object { "imgmount d `"$_`" -t cdrom -ide 2m" })
+$($DiskImages | ForEach-Object { "imgmount d `"$_`" -t cdrom" })
 BOOT C:
 "@
 $runConfig = Import-DosBoxXConf -Path $progInstallConfPath
@@ -111,10 +109,19 @@ $runConfig = Import-DosBoxXConf -Path $progInstallConfPath
 | Set-ConfigOption -SectionName 'sdl' -OptionName 'aspect' -Value 'true'
 | Set-ConfigOption -SectionName 'dosbox' -OptionName 'title' -Value "$ProgramName"
 | Set-ConfigOption -SectionName 'config' -OptionName 'set TARGET' -Value $programCommand
+| Set-ConfigOption -SectionName 'config' -OptionName 'set ENV_TYPE' -Value $EnvType
 | Set-ConfigOption -SectionName 'autoexec' -Value $runAutoexec
+
+if ($EnvType -eq 'dos') {
+    $runConfig = $runConfig | Set-ConfigOption -SectionName 'config' -OptionName 'set DOS_MODE' -Value $DosMode
+}
 
 Export-DosBoxXConf -Config $runConfig -Path "$programDir/dosbox-x.conf"
 
 $ProgramName | Out-File -FilePath "$programDir/program-name.txt"
 
-Get-ProgramIcon -ProgramDirName $normalizedName -DosBoxXCommand $DosBoxXCommand
+if ($EnvType -eq 'dos') {
+    Write-Host "Skipping icon extraction: DOS executables do not contain icon resources."
+} else {
+    Get-ProgramIcon -ProgramDirName $normalizedName -DosBoxXCommand $DosBoxXCommand
+}
